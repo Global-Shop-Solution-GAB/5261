@@ -1,0 +1,94 @@
+Program.Sub.ScreenSU.Start
+Gui.fMaint..Create
+Gui.fMaint..Caption("Maintain Tables for AR Export")
+Gui.fMaint..Size(15360,10695)
+Gui.fMaint..MinX(0)
+Gui.fMaint..MinY(0)
+Gui.fMaint..Position(0,0)
+Gui.fMaint..BackColor(-2147483633)
+Gui.fMaint..MousePointer(0)
+Gui.fMaint..Event(UnLoad,fMaint_UnLoad1)
+Gui.fMaint.GsGCMestexPL.Create(GsGridControl)
+Gui.fMaint.GsGCMestexPL.Size(7665,8640)
+Gui.fMaint.GsGCMestexPL.Position(330,315)
+Gui.fMaint.GsGCMestexPL.Event(CellValueChanged,GsGCMestexPL_CellValueChanged)
+Gui.fMaint.GsGCMestexSundries.Create(GsGridControl)
+Gui.fMaint.GsGCMestexSundries.Size(6390,8595)
+Gui.fMaint.GsGCMestexSundries.Position(8400,360)
+Gui.fMaint.GsGCMestexSundries.Event(CellValueChanged,GsGCMestexSundries_CellValueChanged)
+Gui.fMaint.lblPL.Create(Label,"GCG_5261_Mestex_PL",True,2685,255,0,1680,90,True,0,"Arial",8,-2147483633,0)
+Gui.fMaint.lblSundries.Create(Label,"GGC_5261_Sundries",True,2490,255,0,10065,120,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Author: GaryB
+'Date:   10/04/18
+'Customer: MESTEX.
+'Add custom menu item to allow Mestex to update their 2 custom tables, GCG_5261_Mestex_PL and GCG_5261_Sundries
+'custom menu item - Inventory > View > Inventory Dashboard
+'GCG_5261_MESTEX_MAINT.g2u 
+
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+
+v.Local.sSQL.Declare(String)
+'open DB connection
+f.ODBC.Connection!Con.OpenCompanyConnection
+'custom menu item - Inventory > View > Inventory Dashboard  
+
+F.Data.DataTable.CreateFromSQL("dtPL","Con","Select * from GCG_5261_MESTEX_PL")
+F.Data.DataTable.CreateFromSQL("dtSUNDRIES","Con","Select * from GCG_5261_SUNDRIES")
+
+'create gridview
+gui.fMaint.GsGCMestexPL.AddGridviewFromDatatable("gvPL","dtPL")
+gui.fMaint.GsGCMestexSundries.AddGridviewFromDataTable("gvSUNDRIES","dtSUNDRIES")
+f.Intrinsic.Control.CallSub(SETUPGRIDS)
+'set this to the mainview
+gui.fMaint.GsGCMestexPL.MainView("gvPL") 
+gui.fMaint.GsGCMestexSundries.MainView("gvSUNDRIES")
+'show the screen
+gui.fMaint..Show
+
+f.ODBC.Connection!Con.Close
+
+F.Intrinsic.Control.Catch
+    F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    f.Intrinsic.Control.CallSub(fMaint_Unload1)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.fMaint_UnLoad.Start
+f.Intrinsic.Control.End
+Program.Sub.fMaint_UnLoad.End
+
+Program.Sub.GsGCMestexPL_CellValueChanged.Start
+Program.Sub.GsGCMestexPL_CellValueChanged.End
+
+Program.Sub.GsGCMestexSundries_CellValueChanged.Start
+Program.Sub.GsGCMestexSundries_CellValueChanged.End
+
+Program.Sub.fMaint_UnLoad1.Start
+f.Intrinsic.Control.End
+Program.Sub.fMaint_UnLoad1.End
+
+Program.Sub.SETUPGRIDS.Start
+'let the grids be editable and allow delete and add rows
+gui.fMaint.GsGCMestexPL.SetGridviewProperty("gvPL","Editable","True")
+gui.fMaint.GsGCMestexPL.SetGridviewProperty("gvPL","ReadOnly","False")
+gui.fMaint.GsGCMestexPL.SetGridviewProperty("gvPL","AllowAddRows","True")
+gui.fMaint.GsGCMestexPL.SetGridviewProperty("gvPL","AllowDeleteRows","True")
+gui.fMaint.GsGCMestexSundries.SetGridviewProperty("gvSUNDRIES","Editable","True")
+gui.fMaint.GsGCMestexSundries.SetGridviewProperty("gvSUNDRIES","ReadOnly","False")
+gui.fMaint.GsGCMestexSundries.SetGridviewProperty("gvSUNDRIES","AllowAddRows","True")
+gui.fMaint.GsGCMestexSundries.SetGridviewProperty("gvSUNDRIES","AllowDeleteRows","True")
+'bold grid column headings
+gui.fMaint.GsGCMestexPL.SetColumnProperty("gvPL","PRODUCT_LINE","HeaderFontBold","True")
+gui.fMaint.GsGCMestexPL.SetColumnProperty("gvPL","COMPANY","HeaderFontBold","True")
+gui.fMaint.GsGCMestexPL.SetColumnProperty("gvPL","CODE","HeaderFontBold","True")
+gui.fMaint.GsGCMestexSundries.SetColumnProperty("gvSUNDRIES","SUNDRIES","HeaderFontBold","True")
+gui.fMaint.GsGCMestexSundries.SetColumnProperty("gvSUNDRIES","PERCENT","HeaderFontBold","True")
+Program.Sub.SETUPGRIDS.End
