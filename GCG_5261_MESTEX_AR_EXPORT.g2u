@@ -1,0 +1,447 @@
+Program.Sub.ScreenSU.Start
+Gui.F_Main..create
+Gui.F_Main..caption("AR Invoice Export")
+Gui.F_Main..size(4455,2070)
+Gui.F_Main..position(0,0)
+Gui.F_Main..event(UnLoad,f_main_unload)
+Gui.F_Main..forecolor(0)
+Gui.F_Main..fontstyle(,,)
+Gui.F_Main..BackColor(-2147483633)
+Gui.F_Main..maxbutton(False)
+Gui.F_Main..mousepointer(0)
+Gui.F_Main..sizeable(False)
+Gui.F_Main..MinX(0)
+Gui.F_Main..MinY(0)
+Gui.F_Main.frame1.create(frame)
+Gui.F_Main.frame1.caption("Invoice Date Range")
+Gui.F_Main.frame1.size(4050,1425)
+Gui.F_Main.frame1.position(110,80)
+Gui.F_Main.cmdExport.create(button)
+Gui.F_Main.cmdExport.caption("Export")
+Gui.F_Main.cmdExport.size(870,375)
+Gui.F_Main.cmdExport.position(2715,900)
+Gui.F_Main.cmdExport.parent("frame1")
+Gui.F_Main.cmdExport.event(Click,cmdexport_click)
+Gui.F_Main.lbl1.create(label,"To",True,540,255,1,2265,300,True,0,Arial,8,-2147483633,0)
+Gui.F_Main.lbl1.parent("frame1")
+Gui.F_Main.lbl2.create(label,"From",True,1215,255,1,480,285,True,0,Arial,8,-2147483633,0)
+Gui.F_Main.lbl2.parent("frame1")
+Gui.F_Main.dpTO.Create(DatePicker)
+Gui.F_Main.dpTO.Size(1935,285)
+Gui.F_Main.dpTO.Position(2070,525)
+Gui.F_Main.dpTO.Parent("frame1")
+Gui.F_Main.dpFrom.Create(DatePicker)
+Gui.F_Main.dpFrom.Size(1935,285)
+Gui.F_Main.dpFrom.Position(75,525)
+Gui.F_Main.dpFrom.Parent("frame1")
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Variable.Global.sTest.Declare(String,"1")
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'MESTEX AR EXPORT; Runs on Standalone Hook
+'Author: GaryB
+'Date:   09/28/18
+'Customer: Mestex.
+'Modify existing AR export program to add some new fields and also give them a maintenance program to update sundry amounts
+'GCG_5261_MESTEX_AR_EXPORT.g2u 
+'Will replace the old ATG_MES_PL table and with GCG_5261_MESTEX_PL and add new rows to it.
+'Will create new table GCG_5261_SUNDRIES and give them a maintenance program for it, this is to match up user field 4
+'entries with this table to add an extra percentage amount to the materials cost.
+'Make Screen visible
+Gui.F_Main..Show
+
+'Open Connection to Database
+F.ODBC.Connection!conx.OpenCompanyConnection
+
+
+Program.Sub.Main.End
+
+Program.Sub.cmdexport_click.Start
+V.Local.sSQL.Declare(String)
+V.Local.bExist.Declare(Boolean)
+V.Local.sDateFrom.Declare(String)
+V.Local.sDateTo.Declare(String)
+V.Local.sParam.Declare(String)
+V.Local.sReport.Declare(String)
+V.Local.sReport2.Declare(String)
+V.Local.sReport3.Declare(String)
+V.Local.sReportLD.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.id.Declare(Long)
+V.Local.ix.Declare(Long)
+V.Local.iCount.Declare(Long)
+V.Local.sDate.Declare(String)
+V.Local.sExt.Declare(String)
+V.Local.sTax.Declare(String)
+V.Local.sSales.Declare(String)
+V.Local.sSalesCode.Declare(String)
+V.Local.sCust.Declare(String)
+V.Local.sPO.Declare(String)
+V.Local.ftemp.Declare(Float)
+V.Local.ftax.Declare(Float)
+V.Local.ffreight.Declare(Float)
+V.Local.sLabor.Declare(String)
+V.Local.sMaterial.Declare(String)
+V.Local.sFreight.Declare(String)
+V.Local.sUser4.Declare(String)
+V.Local.sPercent.Declare(String)
+V.Local.fPercent.Declare(Float)
+v.Local.fMaterial.Declare(Float)
+v.Local.sOrder.Declare(String)
+v.Local.sEngLabor.Declare(String)
+V.Local.fQtyShipped.Declare(Float)
+v.Local.fLabor.Declare(Float)
+V.Local.fTotLabor.Declare(Float)
+V.Local.fTotMaterial.Declare(Float)
+V.Local.sTempLine.Declare(String)
+v.Local.sLineNum.Declare(String)
+
+'Must Disable Buttons or Hide Form to prevent double execution
+Gui.F_Main.cmdExport.Enabled(false)
+
+F.Intrinsic.UI.ShowSaveFileDialog("AREXPORT.txt","*.*","C:\",V.Local.sFile)
+
+'f.Intrinsic.Debug.InvokeDebugger
+'Function.Intrinsic.Debug.Stop
+
+'Display Processing Screen
+Function.Intrinsic.UI.InvokeWaitDialog("Processing...","Processing Invoices...")
+
+'Format Date from Date Picker to Pervasive Date
+F.Intrinsic.String.Format(V.Screen.F_Main!dpFrom.Value,"YYYY-MM-DD",V.Local.sDateFrom)
+'Format Date from Date Picker to Pervasive Date
+F.Intrinsic.String.Format(V.Screen.F_Main!dpTo.Value,"YYYY-MM-DD",V.Local.sDateTo)
+
+F.Intrinsic.String.Concat("select INVOICE, SUM(EXTENSION) AS EXTENSION, SUM(TAX_AMT_1) AS TAX_AMT_1, SUM(TAX_AMT_2) AS TAX_AMT_2, SUM(TAX_AMT_3) AS TAX_AMT_3, SUM(TAX_AMT_4) AS TAX_AMT_4, SUM(TAX_AMT_5) AS TAX_AMT_5, SUM(TAX_AMT_6) AS TAX_AMT_6, SUM(TAX_AMT_7) AS TAX_AMT_7, SUM(TAX_AMT_8) AS TAX_AMT_8, SUM(TAX_AMT_9) AS TAX_AMT_9, SUM(TAX_AMT_10) AS TAX_AMT_10 FROM V_ORDER_HIST_LINE WHERE DATE_INVOICE BETWEEN '",V.Local.sDateFrom,"' AND '",V.Local.sDateTo,"' GROUP BY INVOICE",V.Local.sSQL)
+
+F.ODBC.Connection!conx.OpenRecordsetRO("rstInvoiceSUM",V.Local.sSQL)
+F.Intrinsic.Control.DoUntil(V.ODBC.conx!rstInvoiceSUM.EOF,=,True)
+	V.Local.sReport.Set("")
+	F.Intrinsic.String.Concat("SELECT * FROM V_ORDER_HIST_LINE WHERE INVOICE='",V.ODBC.conx!rstInvoiceSUM.FieldValTrim!INVOICE,"' ",V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenRecordsetRO("rstInvoice",V.Local.sSQL)
+
+	Function.Intrinsic.UI.ChangeWaitStatus(V.ODBC.conx!rstInvoice.FieldValTrim!INVOICE,V.Local.iCount,0,500)
+	F.Intrinsic.Math.Add(V.Local.iCount,1,V.Local.iCount)
+
+'	F.Intrinsic.String.Concat("SELECT * FROM ATG_MES_PL WHERE PL='",V.ODBC.conx!rstInvoice.FieldValTrim!PRODUCT_LINE,"'",V.LOCAL.ssql)
+    f.Intrinsic.String.Concat("SELECT * FROM GCG_5261_MESTEX_PL WHERE PRODUCT_LINE ='",V.ODBC.conx!rstInvoice.FieldValTrim!PRODUCT_LINE,"'",V.LOCAL.ssql)
+    F.ODBC.Connection!conx.OpenRecordsetRO("rstPL",V.Local.sSQL)
+'#1 - COMPANY/DIV - 6
+	F.Intrinsic.Control.If(V.ODBC.conx!rstPL.EOF,=,False)
+		F.Intrinsic.String.Concat(V.Local.sReport,V.ODBC.conx!rstPL.FieldValTrim!COMPANY,V.Local.sReport)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat(V.Local.sReport,"004000",V.Local.sReport)
+	F.Intrinsic.Control.endif
+'#2 - INVOICE # - 6
+	F.Intrinsic.String.Concat(V.Local.sReport,V.ODBC.conx!rstInvoice.FieldValTrim!INVOICE,V.Local.sReport)
+'#3 - INVOICE TYPE - 2 always IN
+    F.Intrinsic.String.Concat(V.Local.sReport,"IN",V.Local.sReport)
+'#4 - INVOICE DATE - 6    
+	F.Intrinsic.String.Format(V.ODBC.conx!rstInvoice.FieldVal!DATE_INVOICE,"YYMMDD",V.Local.sDate)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sDate,V.Local.sReport)
+'#5 - PRODUCT CODE - 2
+	F.Intrinsic.Control.If(V.ODBC.conx!rstPL.EOF,=,False)
+		F.Intrinsic.String.Concat(V.Local.sReport,V.ODBC.conx!rstPL.FieldValTrim!CODE,V.Local.sReport)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat(V.Local.sReport,"00",V.Local.sReport)
+	F.Intrinsic.Control.endif
+	F.ODBC.conx!rstPL.Close
+'TAX
+	F.Intrinsic.Math.Add(V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_1,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_2,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_3,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_4,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_5,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_6,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_7,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_8,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_9,V.ODBC.conx!rstInvoiceSUM.FieldValFloat!TAX_AMT_10,V.Local.sTax)
+	V.Local.ftax.Set(V.Local.sTax)	
+'#6 - INVOICE TOTAL - 9
+	V.Local.sExt.Set(V.ODBC.conx!rstInvoiceSUM.FieldValTrim!EXTENSION)
+	F.Intrinsic.Math.Add(V.Local.sExt,V.Local.ftax,V.Local.sExt)
+	F.Intrinsic.String.Format(V.Local.sExt,"0.00",V.Local.sExt)
+	F.Intrinsic.String.Replace(V.Local.sExt,".","",V.Local.sExt)
+	F.Intrinsic.String.LPad(V.Local.sExt,"0",9,V.Local.sExt)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sExt,V.Local.sReport)
+'#7, #8 - ZEROES - 7 - always 0000000  and a BLANK SPACE - 1	
+	F.Intrinsic.String.Concat(V.Local.sReport,"0000000 ",V.Local.sReport)
+'#9 - SHIP TO STATE - 2	
+	F.Intrinsic.String.Concat(V.Local.sReport,V.ODBC.conx!rstInvoice.FieldValTrim!STATE_SHIP,V.Local.sReport)
+'#10 - TAX - 7
+	F.Intrinsic.String.Format(V.Local.sTAx,"0.00",V.Local.sTAX)
+	F.Intrinsic.String.Replace(V.Local.sTax,".","",V.Local.sTax)
+	F.Intrinsic.String.LPad(V.Local.sTax,"0",7,V.Local.sTax)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sTax,V.Local.sReport)
+'#11 - FREIGHT CODE - 1 always A 	
+	F.Intrinsic.String.Concat(V.Local.sReport,"A",V.Local.sReport)
+'#12 - FREIGHT COST - 7 - PULL FROM V_ORDER_HIST_LINE
+  F.Intrinsic.String.Concat("SELECT COST FROM V_ORDER_HIST_LINE WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"' AND INVOICE = '",V.ODBC.conx!rstInvoice.FieldValLTrim!Invoice,"' AND ORDER_LINE = '8000'",V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenRecordsetRO("rstInvoiceFREIGHT",V.Local.sSQL)	
+	f.Intrinsic.Control.If(v.ODBC.conx!rstInvoiceFREIGHT.EOF,=,False)	
+       v.Local.sFreight.Set(V.ODBC.conx!rstInvoiceFREIGHT.FieldValTrim!COST)
+	   F.Intrinsic.String.Format(V.Local.sFreight,"0.00",V.Local.sFreight)
+	   F.Intrinsic.String.Replace(V.Local.sFreight,".","",V.Local.sFreight)
+	   F.Intrinsic.String.LPad(V.Local.sFreight,"0",7,V.Local.sFreight)
+	   F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sFreight,V.Local.sReport)
+	f.Intrinsic.Control.Else   
+       f.Intrinsic.String.Concat(V.Local.sReport,"0000000",V.Local.sReport)
+    f.Intrinsic.Control.EndIf
+    f.ODBC.conx!rstInvoiceFREIGHT.Close
+'#13 - LABOR COSTS - 7 - PULL labor FROM V_oe_sys_cost_elem and make sure to get all lines
+    'need to get quantity shipped from order_hist_line and multiply labor by that amount for each line
+	'F.Intrinsic.String.Concat(V.Local.sReport,"0000000",V.Local.sReport)
+	F.Intrinsic.String.Concat("SELECT QTY_SHIPPED,ORDER_LINE FROM V_ORDER_HIST_LINE WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"' AND INVOICE = '",V.ODBC.conx!rstInvoice.FieldValLTrim!Invoice,"' AND ORDER_LINE <> '8000'",V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenRecordsetRO("rstLaborQTY",V.Local.sSQL)
+    f.Intrinsic.Control.If(v.odbc.conx!rstLaborQTY.EOF,=,FALSE)
+	   v.Local.fTotLabor.Set(0.0)	   
+	   F.Intrinsic.Control.DoUntil(v.odbc.conx!rstLaborQTY.EOF,=,TRUE)
+	      v.Local.fQtyShipped.Set(V.ODBC.conx!rstLaborQTY.FieldValTrim!QTY_SHIPPED)
+          F.Intrinsic.String.Concat("SELECT LABOR FROM V_OE_SYS_COST_ELEM WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"' AND INVOICE = '",V.ODBC.conx!rstInvoice.FieldValLTrim!Invoice,"' AND LINE = '",v.ODBC.conx!rstLaborQTY.FieldValLTrim!ORDER_LINE,"'",V.Local.sSQL)
+	      F.ODBC.Connection!conx.OpenRecordsetRO("rstLabor",V.Local.sSQL) 	  
+	         f.Intrinsic.Control.If(v.odbc.conx!rstLabor.EOF,=,FALSE)
+	            V.Local.fLabor.Set(V.ODBC.conx!rstLabor.FieldValTrim!LABOR)
+                f.Intrinsic.Math.Mult(v.Local.fLabor,v.Local.fQtyShipped,v.Local.fLabor)
+	            f.Intrinsic.Math.Add(v.Local.fLabor,v.Local.fTotLabor,v.Local.fTotLabor)
+             f.Intrinsic.Control.EndIf   
+	      f.ODBC.Conx!rstLabor.Close     
+	   F.ODBC.conx!rstLaborQTY.MoveNext
+	   F.Intrinsic.Control.Loop
+	   v.Local.sLabor.Set(v.Local.fTotLabor)
+	   F.Intrinsic.String.Format(V.Local.sLabor,"0.00",V.Local.sLabor)
+       F.Intrinsic.String.Replace(V.Local.sLabor,".","",V.Local.sLabor)
+	   F.Intrinsic.String.LPad(V.Local.sLabor,"0",7,V.Local.sLabor)
+	   F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sLabor,V.Local.sReport)
+	f.Intrinsic.Control.Else
+	   f.Intrinsic.String.Concat(V.Local.sReport,"0000000",V.Local.sReport)
+	F.Intrinsic.Control.EndIf
+	 f.ODBC.conx!rstLaborQty.Close
+'#14 - MATERIAL COSTS - 7 - PULL QTY_SHIPPED FROM V_ORDER_HIST_LINE then need to check user field 4 and see if it matches any entries in GCG_5261_SUNDRIES table
+' if so then I need to add the percent entered to the cost_material amount
+'they have multiple lines of material costs for some invoices, so need to LOOP AND GRAB THE QTY_SHIPPED FIELD TO COME UP WITH PROPER AMOUNT for each line
+
+    F.Intrinsic.String.Concat("SELECT QTY_SHIPPED,ORDER_LINE FROM V_ORDER_HIST_LINE WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"' AND INVOICE = '",V.ODBC.conx!rstInvoice.FieldValLTrim!Invoice,"' AND ORDER_LINE <> '8000'",V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenRecordsetRO("rstMATL",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstMATL.EOF,=,FALSE)
+	   v.Local.fTotMaterial.Set(0.0)
+	   F.Intrinsic.Control.DoUntil(v.odbc.conx!rstMATL.EOF,=,TRUE)         
+          v.Local.fQtyShipped.Set(V.ODBC.conx!rstMATL.FieldValTrim!QTY_SHIPPED)
+'          v.Local.sTempLine.Set(v.ODBC.conx!rstMATL.FieldValLTrim!ORDER_LINE)
+          F.Intrinsic.String.Concat("SELECT MATL FROM V_OE_SYS_COST_ELEM WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"' AND INVOICE = '",V.ODBC.conx!rstInvoice.FieldValLTrim!Invoice,"' AND LINE = '",v.ODBC.conx!rstMATL.FieldValLTrim!ORDER_LINE,"'",V.Local.sSQL)
+	      F.ODBC.Connection!conx.OpenRecordsetRO("rstMATLOE",V.Local.sSQL)
+	         f.Intrinsic.Control.If(v.odbc.conx!rstMATLOE.EOF,=,FALSE)
+                V.Local.fMaterial.Set(V.ODBC.conx!rstMATLOE.FieldValTrim!MATL)        
+                f.Intrinsic.Math.Mult(v.Local.fMaterial,v.Local.fQtyShipped,v.Local.fMaterial)
+                f.Intrinsic.Math.Add(v.Local.fMaterial,v.Local.fTotMaterial,v.Local.fTotMaterial)   
+             f.Intrinsic.Control.EndIf 
+          F.ODBC.conx!rstMATLOE.Close 
+          F.ODBC.conx!rstMATL.MoveNext
+	   F.Intrinsic.Control.Loop
+             f.Intrinsic.String.Concat("SELECT USER_4 FROM V_ORDER_HIST_HEAD WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"'",V.Local.sSQL)
+             F.ODBC.Connection!conx.OpenRecordSetRO("rstUSER4",V.Local.sSQL)
+             F.Intrinsic.Control.If(V.ODBC.conx!rstUSER4.EOF,=,False)   
+                V.Local.sUser4.Set(V.ODBC.conx!rstuser4.FieldValTrim!USER_4)              
+             F.Intrinsic.Control.EndIf
+             f.ODBC.conx!rstUSER4.Close   
+             f.Intrinsic.String.Build("SELECT PERCENT FROM GCG_5261_SUNDRIES WHERE SUNDRIES = '{0}' ",V.Local.sUser4,V.LOCAL.ssql) 
+             F.ODBC.Connection!conx.OpenRecordsetRO("rstPercent",V.Local.sSQL)
+             f.Intrinsic.Control.If(v.ODBC.conx!rstPercent.EOF,=,False)       
+                f.Intrinsic.Control.If(V.ODBC.conx!rstPERCENT.FieldValTrim!PERCENT, > , 0)
+                   v.Local.fPercent.Set(V.ODBC.conx!rstPERCENT.FieldValTrim!PERCENT)
+                   f.Intrinsic.Math.Add(v.Local.fPercent,100,v.Local.fPercent)
+                   f.Intrinsic.Math.Div(v.Local.fPercent,100,v.Local.fPercent)
+                   f.Intrinsic.Math.Mult(v.Local.fTotMaterial,v.Local.fPercent,v.Local.fTotMaterial)                    
+                f.Intrinsic.Control.EndIf            
+             f.Intrinsic.Control.EndIf   
+             f.ODBC.conx!rstPercent.Close
+       V.Local.sMaterial.Set(v.Local.fTotMaterial)      
+       F.Intrinsic.String.Format(V.Local.sMaterial,"0.00",V.Local.sMaterial)
+  	   F.Intrinsic.String.Replace(V.Local.sMaterial,".","",V.Local.sMaterial)
+	   F.Intrinsic.String.LPad(V.Local.sMaterial,"0",7,V.Local.sMaterial)
+       F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sMaterial,V.Local.sReport)
+    F.Intrinsic.Control.Else   
+       f.Intrinsic.String.Concat(V.Local.sReport,"0000000",V.Local.sReport)   
+    f.Intrinsic.Control.EndIf   
+    f.ODBC.conx!rstMATL.Close
+'f.Intrinsic.Debug.InvokeDebugger 
+'Function.Intrinsic.Debug.Stop
+
+'#15 - BLANK - 1 always blank 	
+	F.Intrinsic.String.Concat(V.Local.sReport," ",V.Local.sReport)	
+'#16 - ENGINEERING COSTS - 7 - PULL FROM WORK ORDER HEADER THAT MATCHES SALES ORDER AND HAS 'ENG' AS SUFFIX, GET TOTAL LABOR AMOUNTS FROM JOB_HEADER	
+'take the order number and then the rightmost 4 characters, get the orderline 4 chars - only use the 2nd 3rd position add a one to the  and then append it to the orderno
+    V.Local.sOrder.Set(V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO)
+    v.Local.sLineNum.Set(V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_LINE)
+    f.Intrinsic.String.Right(v.Local.sOrder,4,v.Local.sOrder)  
+    f.Intrinsic.String.Mid(v.Local.sLineNum,2,2,v.Local.sLineNum)       
+       f.Intrinsic.Control.SelectCase(v.Local.sLineNum)
+         f.Intrinsic.Control.Case("01")
+           f.Intrinsic.String.Build("{0}11",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("02")
+           f.Intrinsic.String.Build("{0}21",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("03")
+           f.Intrinsic.String.Build("{0}31",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("04")
+           f.Intrinsic.String.Build("{0}41",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("05")
+           f.Intrinsic.String.Build("{0}51",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("06")
+           f.Intrinsic.String.Build("{0}61",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("07")
+           f.Intrinsic.String.Build("{0}71",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("08")
+           f.Intrinsic.String.Build("{0}81",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("09")
+           f.Intrinsic.String.Build("{0}91",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("10")
+           f.Intrinsic.String.Build("{0}01",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("11")
+           f.Intrinsic.String.Build("{0}12",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("12")
+           f.Intrinsic.String.Build("{0}13",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("13")
+           f.Intrinsic.String.Build("{0}14",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("14")
+           f.Intrinsic.String.Build("{0}15",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("15")
+           f.Intrinsic.String.Build("{0}16",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("16")
+           f.Intrinsic.String.Build("{0}17",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("17")
+           f.Intrinsic.String.Build("{0}18",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("18")
+           f.Intrinsic.String.Build("{0}19",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("19")
+           f.Intrinsic.String.Build("{0}20",v.Local.sOrder,v.Local.sOrder)
+         f.Intrinsic.Control.Case("20")
+           f.Intrinsic.String.Build("{0}21",v.Local.sOrder,v.Local.sOrder)          
+       f.Intrinsic.Control.EndSelect
+    f.Intrinsic.String.Build("SELECT AMT_LABOR FROM JOB_HEADER WHERE JOB = '{0}' AND SUFFIX = 'ENG'",V.Local.sOrder,V.Local.sSQL)
+    f.ODBC.Connection!conx.OpenRecordsetRO("rstEngLabor",V.Local.sSQL)
+    F.Intrinsic.Control.If(V.ODBC.conx!rstEngLabor.EOF,=,False)
+       f.Intrinsic.Control.If(v.ODBC.conx!rstEngLabor.FieldValLTrim!AMT_LABOR, > , 0)
+          v.Local.sEngLabor.Set(v.ODBC.conx!rstENGLabor.FieldValLTrim!AMT_LABOR)
+          f.Intrinsic.String.Format(V.Local.sEngLabor,"0.00",V.Local.sEngLabor)
+          f.Intrinsic.String.Replace(V.Local.sEngLabor,".","",V.Local.sEngLabor)
+  	      f.Intrinsic.String.LPad(V.Local.sEngLabor,"0",7,V.Local.sEngLabor)
+          f.Intrinsic.String.Concat(V.Local.sReport,V.Local.sEngLabor,V.Local.sReport)
+       f.Intrinsic.Control.Else
+          f.Intrinsic.String.Concat(V.Local.sReport,"0000000",V.Local.sReport)
+       f.Intrinsic.Control.EndIf
+    f.Intrinsic.Control.Else
+        f.Intrinsic.String.Concat(V.Local.sReport,"0000000",V.Local.sReport)
+    f.Intrinsic.Control.EndIf 
+    f.ODBC.conx!rstEngLabor.Close
+'#17 - REP NUMBER - 4
+	F.Intrinsic.String.Concat(V.Local.sReport,"****",V.Local.sReport)
+'#18 - COMMISSION AMOUNT - 7	
+	F.Intrinsic.String.Concat(V.Local.sReport,"@@@@@@@",V.Local.sReport)
+'#19 - CUSTOMER NUMBER - 6
+	F.Intrinsic.String.LPad(V.ODBC.conx!rstInvoice.FieldValTrim!CUSTOMER,"0",6,V.Local.sCust)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sCust,V.Local.sReport)
+'#20 - ORDER NUMBER - 8
+	F.Intrinsic.String.LPad(V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"0",8,V.Local.sCust)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sCust,V.Local.sReport)
+'#21 - PO NUMBER  - 15
+	F.Intrinsic.String.Left(V.ODBC.conx!rstInvoice.FieldValTrim!CUSTOMER_PO,15,V.Local.sPO)
+	F.Intrinsic.String.RPad(V.Local.sPO," ",15,V.Local.sPO)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sPO,V.Local.sReport)
+'#22 - SHIP TO ZIP CODE - 5
+	F.Intrinsic.String.Left(V.ODBC.conx!rstInvoice.FieldValTrim!ZIP_SHIP,5,V.Local.sPO)
+	F.Intrinsic.String.RPad(V.Local.sPO," ",5,V.Local.sPO)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sPO,V.Local.sReport)
+'#23 - SHIP TO CITY - 15
+	F.Intrinsic.String.Left(V.ODBC.conx!rstInvoice.FieldValTrim!CITY_SHIP,15,V.Local.sPO)
+	F.Intrinsic.String.RPad(V.Local.sPO," ",15,V.Local.sPO)
+	F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sPO,V.Local.sReport)
+'#24 - ? - 18 - always 001000000000000000
+	F.Intrinsic.String.Concat(V.Local.sReport,"001000000000000000",V.Local.sReport)
+
+'Sales REP# Lookup
+	F.Intrinsic.String.Concat("SELECT * FROM V_SALESPEOPLE WHERE SALESPERSON_CODE='",V.ODBC.conx!rstInvoice.FieldValTrim!SALESPERSON,"'",V.LOCAL.ssql)
+	F.ODBC.Connection!conx.OpenRecordsetRO("rstSALES",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstSALES.EOF,=,False)
+		F.Intrinsic.String.Mid(V.ODBC.conx!rstSALES.FieldValTrim!SALESPERSON,2,4,V.Local.sSalesCode)
+		F.Intrinsic.Control.If(V.Local.sSales,=,"")
+			V.Local.sSalesCode.Set("0339")
+		F.Intrinsic.Control.Else
+			'F.Intrinsic.String.Concat(V.Local.sReport,V.Local.sSales,V.Local.sReport)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Else
+		V.Local.sSalesCode.Set("0339")
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstSALES.Close
+
+'Repeat Lines for invoices with multiple commisions
+	V.Local.sReport2.Set("")
+	V.Local.sReport3.Set("")
+		V.Local.ftemp.Set(0)
+	F.Intrinsic.String.Concat("SELECT * FROM V_COMMISSION_PCT WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"'",V.LOCAL.ssql)
+	F.ODBC.Connection!conx.OpenRecordsetRO("rstSALES",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstSALES.EOF,=,False)
+		V.Local.ftemp.Set(1)
+		V.Local.ix.Set(0)
+		F.Intrinsic.Control.DoUntil(V.ODBC.conx!rstSALES.EOF,=,True)
+			F.Intrinsic.Control.If(V.ODBC.conx!rstSALES.FieldValFloat!PCT,<>,0)
+				V.Local.ffreight.Set(0)
+				F.Intrinsic.String.Concat("SELECT * FROM V_ORDER_HIST_LINE WHERE ORDER_NO='",V.ODBC.conx!rstInvoice.FieldValTrim!ORDER_NO,"' AND LINE_TYPE='F'",V.Local.sSQL)
+				F.ODBC.Connection!conx.OpenRecordsetRO("rstInvoiceF",V.Local.sSQL)
+				F.Intrinsic.Control.If(V.ODBC.conx!rstInvoiceF.EOF,=,False)
+					V.Local.ffreight.Set(V.ODBC.conx!rstInvoiceF.FieldValTrim!EXTENSION)
+				F.Intrinsic.Control.EndIf
+				F.ODBC.conx!rstInvoiceF.Close
+				F.Intrinsic.Math.sub(V.ODBC.conx!rstInvoiceSUM.FieldValTrim!EXTENSION,V.Local.ffreight,V.Local.ftemp)
+				F.Intrinsic.Math.Mult(V.Local.ftemp,V.ODBC.conx!rstSALES.FieldValFloat!PCT,V.Local.ftemp)
+				F.Intrinsic.Math.Div(V.Local.ftemp,100,V.Local.ftemp)
+				V.Local.sSales.Set(V.Local.ftemp)
+			F.Intrinsic.Control.Else
+				V.Local.sSales.Set(V.ODBC.conx!rstSALES.FieldValTrim!AMT)
+			F.Intrinsic.Control.EndIf
+
+			F.Intrinsic.String.Concat("SELECT * FROM V_SALESPEOPLE WHERE SALESPERSON_CODE='",V.ODBC.conx!rstSALES.FieldValFloat!SM,"'",V.LOCAL.ssql)
+			F.ODBC.Connection!conx.OpenRecordsetRO("rstSALES2",V.Local.sSQL)
+			F.Intrinsic.Control.If(V.ODBC.conx!rstSALES2.EOF,=,False)
+				F.Intrinsic.String.Mid(V.ODBC.conx!rstSALES2.FieldValTrim!SALESPERSON,2,4,V.Local.sSalesCode)
+			F.Intrinsic.Control.EndIf
+			F.ODBC.conx!rstSALES2.Close
+
+			F.Intrinsic.String.Format(V.Local.sSales,"0.00",V.Local.sSales)
+			F.Intrinsic.String.Replace(V.Local.sSales,".","",V.Local.sSales)
+			F.Intrinsic.String.LPad(V.Local.sSales,"0",7,V.Local.sSales)
+			V.Local.sReport2.Set(V.Local.sReport)
+			F.Intrinsic.String.Replace(V.Local.sReport,"****",V.Local.sSalesCode,V.Local.sReport2)
+			F.Intrinsic.String.Replace(V.Local.sReport2,"@@@@@@@",V.Local.sSales,V.Local.sReport2)
+			F.Intrinsic.Control.If(V.Local.ix,>,0)
+				F.Intrinsic.String.Replace(V.Local.sReport2,V.local.sExt,"000000000",V.Local.sReport2)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.String.Concat(V.Local.sReport3,V.Local.sReport2,V.Ambient.NewLine,V.Local.sReport3)
+			
+			F.ODBC.conx!rstSALES.MoveNext
+			F.Intrinsic.Math.Add(V.Local.ix,1,V.Local.ix)
+		F.Intrinsic.Control.Loop
+	F.Intrinsic.Control.ElseIF(V.Local.ftemp,=,0)
+		V.Local.sSales.Set("0000000")
+		F.Intrinsic.String.Replace(V.Local.sReport,"****",V.Local.sSalesCode,V.Local.sReport3)
+		F.Intrinsic.String.Replace(V.Local.sReport3,"@@@@@@@",V.Local.sSales,V.Local.sReport3)
+		F.Intrinsic.String.Concat(V.Local.sReport3,V.Ambient.NewLine,V.Local.sReport3)
+	F.Intrinsic.Control.EndIf
+	
+	F.ODBC.conx!rstSALES.Close
+	F.ODBC.conx!rstInvoice.Close
+
+	F.Intrinsic.String.Concat(V.Local.sReportLD,V.Local.sReport3,V.Local.sReportLD)
+	F.ODBC.conx!rstInvoiceSUM.MoveNext
+F.Intrinsic.Control.Loop
+F.ODBC.conx!rstInvoiceSUM.Close
+
+F.IntrinsiC.File.String2File(V.Local.sFile,V.Local.sReportLD)
+F.Intrinsic.String.Concat("File ",V.Local.sFile," has been exported.",V.local.spo)
+F.Intrinsic.UI.Msgbox(V.Local.sPO,"File Exported.")
+F.Intrinsic.Control.End
+
+Program.Sub.cmdexport_click.End
+
+Program.Sub.f_main_unload.Start
+f.Intrinsic.Control.End
+f.ODBC.Connection!conx.Close
+Program.Sub.f_main_unload.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$$}$12:00:00 AM$}$False
+Program.Sub.Comments.End
